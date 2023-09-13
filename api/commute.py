@@ -1,12 +1,17 @@
 from blacksheep import Application
-from blacksheep.client import ClientSession
+from blacksheep import Response
+from blacksheep import json
+from blacksheep import bad_request
 from blacksheep import JSONContent
-from typing import Union
+from blacksheep.client import ClientSession
+
+
+ROUTES_LIMITING = 49
 
 
 async def configure_http_client(app):
     http_client = ClientSession()
-    app.services.add_instance(http_client)  # register a singleton
+    app.services.add_instance(http_client)
 
 
 async def dispose_http_client(app):
@@ -38,12 +43,12 @@ async def get_municipalities(http_client: ClientSession) -> list[str]:
 @get("/")
 async def index(
     http_client: ClientSession, location: str, max_minutes: int, api_key: str
-) -> list[dict[str, Union[str, int]]]:
+) -> Response:
     reachable_destinations = []
 
-    request: dict[str, Union[dict[str, Union[str, list[str]]], str]] = {
-        "origin": {"address": ""},
-        "destination": {"address": location},
+    request: dict = {
+        "origins": [],
+        "destinations": [{"waypoint": {"address": location}}],
         "travelMode": "TRANSIT",
         "units": "METRIC",
         "transitPreferences": {
@@ -51,28 +56,39 @@ async def index(
         },
     }
 
-    for municipality in await get_municipalities(http_client=http_client):
-        print(municipality)
+    municipalities: list[str] = await get_municipalities(http_client=http_client)
 
-        request["origin"] = {"address": municipality}
+    for i in range(0, len(municipalities), ROUTES_LIMITING):
+        slice = municipalities[i : i + ROUTES_LIMITING]
 
-        url = f"https://routes.googleapis.com/directions/v2:computeRoutes?key={api_key}&fields=routes.duration,routes.distanceMeters"
+        request["origins"] = [{"waypoint": {"address": m}} for m in slice]
+        print(request)
+
+        url = f"https://routes.googleapis.com/distanceMatrix/v2:computeRouteMatrix?key={api_key}&fields=duration,distanceMeters,originIndex"
+
         response = await http_client.post(url, content=JSONContent(request))
         assert response is not None
 
         data = await response.json()
+        print(data)
 
-        if "routes" not in data:
-            continue
+        for result in data:
+            if "duration" not in result:
+                continue
+            commute_time_seconds = result["duration"][:-1]
+            commute_time_minutes = int(commute_time_seconds) // 60
 
-        commute_time_seconds = data["routes"][0]["duration"][:-1]
-        print(commute_time_seconds)
-        commute_time_minutes = int(commute_time_seconds) // 60
-        print(commute_time_minutes)
+            if commute_time_minutes <= max_minutes:
+                original_request = request["origins"][result["originIndex"]]
 
-        if commute_time_minutes <= max_minutes:
-            reachable_destinations.append(
-                {"concelho": municipality, "duration": commute_time_minutes}
-            )
+                reachable_destinations.append(
+                    {
+                        "concelho": original_request["waypoint"]["address"],
+                        "duration_in_minutes": commute_time_minutes,
+                    }
+                )
 
-    return reachable_destinations
+    if not reachable_destinations:
+        return bad_request("No routes found. Try a different search query.")
+
+    return json(reachable_destinations)
