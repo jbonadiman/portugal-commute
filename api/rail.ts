@@ -19,6 +19,7 @@ type RequestQuery = {
 type MapsRequest = {
     origins: { waypoint: { address: string } }[];
     destinations: { waypoint: { address: string } }[];
+    arrivalTime: string;
     travelMode: string;
     units: string;
     transitPreferences: { allowedTravelModes: string[]; };
@@ -36,6 +37,14 @@ const getMunicipalities = async () => {
     }
 
     return municipalitiesCache;
+}
+
+const tomorrowMorning = () => {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setHours(9, 0, 0, 0);
+
+    return tomorrow;
 }
 
 export default async function (request: { query: RequestQuery }, response: VercelResponse) {
@@ -56,6 +65,7 @@ export default async function (request: { query: RequestQuery }, response: Verce
     const mapsRequest: MapsRequest = {
         origins: [],
         destinations: [{ waypoint: { address: location } }],
+        arrivalTime: tomorrowMorning().toISOString(),
         travelMode: 'TRANSIT',
         units: 'METRIC',
         transitPreferences: { allowedTravelModes: ['RAIL'] }
