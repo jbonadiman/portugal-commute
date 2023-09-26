@@ -99,7 +99,6 @@ export default async function (request: { query: RequestQuery }, response: Verce
                     durationMinutes: Math.round(Number(route.duration) / 60)
                 };
             }));
-        console.log(JSON.stringify(reachableDestinations))
     }
 
     return response.json(reachableDestinations);
