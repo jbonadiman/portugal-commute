@@ -10,3 +10,4 @@ The program assumes a search with the desired arrival time as 09:00h of the next
 ## TODO
 - Accept a list of address to have a more accurate search to the user's needs.
 - Allow a custom `arrivalTime` as query params.
+- Use vercel's KV/DB/Blob store to cache the concelhos.
